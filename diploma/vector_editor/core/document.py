@@ -163,7 +163,7 @@ class Document(QObject):
         """Очистка документа"""
         self.items.clear()
         self.selected_items.clear()
-        self.preivew_clear.emit()
+        self.preview_clear.emit()
         self.modified = False
         self.filename = None
         self.items_changed.emit()

@@ -12,6 +12,8 @@ from ..tools.ellipse_tool import EllipseTool
 from ..tools.line_tool import LineTool
 from ..tools.polyline_tool import PolylineTool  
 from ..tools.polygon_tool import PolygonTool    
+from ..tools.function_tool import FunctionTool
+from ..tools.spline_tool import SplineTool
 
 from .scene import Scene
 from .scene_view import SceneView
@@ -72,6 +74,8 @@ class MainWindow(QMainWindow):
         self.tool_manager.register_tool('line', LineTool(self.document))
         self.tool_manager.register_tool('polyline', PolylineTool(self.document))
         self.tool_manager.register_tool('polygon', PolygonTool(self.document))
+        self.tool_manager.register_tool('function', FunctionTool(self.document))
+        self.tool_manager.register_tool('spline', SplineTool(self.document))
         # Установка инструмента по умолчанию
         self.tool_manager.set_active_tool('select')
         
@@ -103,6 +107,13 @@ class MainWindow(QMainWindow):
         self.polygon_action.setCheckable(True)
         self.polygon_action.triggered.connect(lambda: self.tool_manager.set_active_tool('polygon'))
         
+        self.function_action = QAction("Функция", self)
+        self.function_action.setCheckable(True)
+        self.function_action.triggered.connect(lambda: self.tool_manager.set_active_tool('function'))
+
+        self.spline_action = QAction("Сплайн", self)
+        self.spline_action.setCheckable(True)
+        self.spline_action.triggered.connect(lambda: self.tool_manager.set_active_tool('spline'))
 
         # Группа действий для инструментов
         self.tool_group = QActionGroup(self)
@@ -112,11 +123,25 @@ class MainWindow(QMainWindow):
         self.tool_group.addAction(self.line_action)
         self.tool_group.addAction(self.polyline_action)
         self.tool_group.addAction(self.polygon_action)
+        self.tool_group.addAction(self.function_action)
+        self.tool_group.addAction(self.spline_action)
         
         # Файл
         self.new_action = QAction("Новый", self)
         self.new_action.setShortcut(QKeySequence.New)
         self.new_action.triggered.connect(self.new_document)
+
+        self.import_svg_action = QAction("Импорт SVG...", self)
+        self.import_svg_action.setShortcut("Ctrl+I")
+        self.import_svg_action.triggered.connect(self.import_svg)
+
+        self.export_svg_action = QAction("Экспорт SVG...", self)
+        self.export_svg_action.setShortcut("Ctrl+E")
+        self.export_svg_action.triggered.connect(self.export_svg)
+
+        self.export_bitmap_action = QAction("Экспорт в растр (PNG/JPEG)...", self)
+        self.export_bitmap_action.setShortcut("Ctrl+Shift+E")
+        self.export_bitmap_action.triggered.connect(self.export_bitmap)
         
         self.quit_action = QAction("Выход", self)
         self.quit_action.setShortcut(QKeySequence.Quit)
@@ -172,6 +197,9 @@ class MainWindow(QMainWindow):
         # Меню "Файл"
         file_menu = self.menuBar().addMenu("&Файл")
         file_menu.addAction(self.new_action)
+        file_menu.addAction(self.import_svg_action)
+        file_menu.addAction(self.export_svg_action)
+        file_menu.addAction(self.export_bitmap_action)
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
         
@@ -180,6 +208,11 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(self.select_action)
         tools_menu.addAction(self.rectangle_action)
         tools_menu.addAction(self.ellipse_action)
+        tools_menu.addAction(self.line_action)
+        tools_menu.addAction(self.polyline_action)
+        tools_menu.addAction(self.polygon_action)
+        tools_menu.addAction(self.function_action)
+        tools_menu.addAction(self.spline_action)
         
         # Меню "Вид"
         view_menu = self.menuBar().addMenu("&Вид")
@@ -208,6 +241,8 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.line_action)
         toolbar.addAction(self.polyline_action)
         toolbar.addAction(self.polygon_action)
+        toolbar.addAction(self.function_action)
+        toolbar.addAction(self.spline_action)
 
         # Панель правки
         edit_toolbar = self.addToolBar("Правка")
@@ -219,6 +254,86 @@ class MainWindow(QMainWindow):
         self.document.clear()
         self.scene.update_scene()
         self.statusBar().showMessage("Новый документ создан")
+
+    def import_svg(self):
+        """Импорт векторного SVG файла"""
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        from ..core.svg_io import SvgSerializer
+        filepath, _ = QFileDialog.getOpenFileName(self, "Импорт SVG", "", "SVG файлы (*.svg)")
+        if filepath:
+            success = SvgSerializer.import_from_svg(filepath, self.document)
+            if success:
+                self.scene.update_scene()
+                self.properties_dock.update_from_item()
+                self.statusBar().showMessage(f"Файл {filepath} импортирован")
+            else:
+                QMessageBox.critical(self, "Ошибка", "Не удалось разобрать SVG файл")
+
+    def export_svg(self):
+        """Экспорт документа в векторный SVG файл"""
+        from PyQt5.QtWidgets import QFileDialog
+        from ..core.svg_io import SvgSerializer
+        filepath, _ = QFileDialog.getSaveFileName(self, "Экспорт SVG", "", "SVG файлы (*.svg)")
+        if filepath:
+            if not filepath.endswith(".svg"):
+                filepath += ".svg"
+            SvgSerializer.export_to_svg(self.document, filepath)
+            self.statusBar().showMessage(f"Документ сохранен в {filepath}")
+
+    def export_bitmap(self):
+        """Экспорт документа в растровые форматы PNG или JPEG"""
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        from PyQt5.QtGui import QImage, QPainter
+        from PyQt5.QtCore import QRectF
+        filepath, selected_filter = QFileDialog.getSaveFileName(
+            self, "Экспорт в растр", "", "PNG рисунок (*.png);;JPEG рисунок (*.jpg *.jpeg)"
+        )
+        if filepath:
+            # Расширение по умолчанию
+            if "png" in selected_filter.lower():
+                if not filepath.lower().endswith(".png"):
+                    filepath += ".png"
+                fmt = "PNG"
+            else:
+                if not (filepath.lower().endswith(".jpg") or filepath.lower().endswith(".jpeg")):
+                    filepath += ".jpg"
+                fmt = "JPEG"
+
+            # Ограничиваем область рендеринга границами сцены или объектов
+            items_rect = self.scene.itemsBoundingRect()
+            if items_rect.isEmpty():
+                items_rect = QRectF(0, 0, 800, 600)
+            else:
+                items_rect = items_rect.adjusted(-10, -10, 10, 10) # отступы
+
+            # Создаем QImage
+            image = QImage(int(items_rect.width()), int(items_rect.height()), QImage.Format_ARGB32)
+            if fmt == "JPEG":
+                image.fill(Qt.white)
+            else:
+                image.fill(Qt.transparent)
+
+            # Временно отключаем сетку во время экспорта
+            was_grid_shown = getattr(self.scene, 'show_grid', True)
+            self.scene.show_grid = False
+
+            # Отрисовываем сцену на QImage
+            painter = QPainter(image)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            
+            # Маппим область сцены на весь размер картинки
+            self.scene.render(painter, QRectF(image.rect()), items_rect)
+            painter.end()
+
+            # Восстанавливаем видимость сетки
+            self.scene.show_grid = was_grid_shown
+
+            # Сохранение
+            if image.save(filepath, fmt):
+                self.statusBar().showMessage(f"Изображение экспортировано в {filepath}")
+            else:
+                QMessageBox.critical(self, "Ошибка", "Не удалось сохранить растровое изображение")
         
     def zoom_in(self):
         """Увеличение масштаба"""

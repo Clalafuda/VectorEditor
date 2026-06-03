@@ -10,6 +10,7 @@ class Scene(QGraphicsScene):
         self.document = document
         self.setSceneRect(0, 0, 800, 600)
         self.preview_items = []
+        self.show_grid = True
         
         # Подключение сигналов документа
         #document.items_changed.connect(self.update_scene)
@@ -131,6 +132,9 @@ class Scene(QGraphicsScene):
         """Отрисовка фона (сетка)"""
         super().drawBackground(painter, rect)
         
+        if not getattr(self, 'show_grid', True):
+            return
+            
         # Рисуем сетку
         pen = QPen(QColor(200, 200, 200), 1)
         pen.setCosmetic(True)

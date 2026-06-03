@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:custom="http://vector.editor/custom" width="800" height="600" viewBox="0 0 800 600">
+  <defs />
+  <g id="layer_2134535624112" custom:type="layer" custom:name="Слой 1" custom:visible="True" custom:locked="False">
+    <rect x="-181.00" y="-96.00" width="1113.00" height="728.00" id="item_2134545145232" custom:name="Rectangle" stroke="#000000" stroke-width="1.10" transform="translate(59.00, -77.00)" fill="#000000" />
+    <polyline points="27.00,214.00 76.00,17.00 108.00,207.00" id="item_2134545150560" custom:name="Polyline" stroke="#ffffff" stroke-width="5.00" fill="#ffffff" />
+    <polyline points="217.00,17.00 201.00,197.00 209.00,100.00 264.00,100.00" id="item_2134545152000" custom:name="Polyline" stroke="#ffffff" stroke-width="1.00" fill="none" />
+    <ellipse cx="322.50" cy="109.50" rx="55.50" ry="86.50" id="item_2134545152720" custom:name="Ellipse" stroke="#ffffff" stroke-width="1.00" fill="none" />
+    <polyline points="578.00,33.00 467.00,27.00 463.00,201.00" id="item_2134545153440" custom:name="Polyline" stroke="#ffffff" stroke-width="1.00" fill="none" />
+    <path d="M 463.00 93.00 L 465.62 93.44 L 469.02 93.82 L 473.10 94.17 L 477.77 94.50 L 482.91 94.82 L 488.44 95.16 L 494.26 95.54 L 500.26 95.97 L 506.36 96.47 L 512.44 97.06 L 518.41 97.76 L 524.18 98.59 L 529.64 99.57 L 534.69 100.70 L 539.24 102.02 L 543.19 103.54 L 546.44 105.28 L 548.89 107.26 L 550.44 109.49 L 551.00 112.00 L 550.50 114.92 L 549.00 118.34 L 546.60 122.20 L 543.41 126.44 L 539.52 131.01 L 535.02 135.84 L 530.03 140.89 L 524.62 146.08 L 518.92 151.37 L 513.00 156.69 L 506.97 161.98 L 500.94 167.20 L 494.98 172.28 L 489.22 177.15 L 483.73 181.77 L 478.63 186.08 L 474.01 190.01 L 469.96 193.52 L 466.59 196.53 L 464.00 199.00" custom:type="spline" custom:spline_points="463.00,93.00 551.00,112.00 464.00,199.00" custom:spline_tension="0.50" custom:spline_closed="False" id="item_2134545219952" custom:name="Spline" stroke="#0032b4" stroke-width="2.00" fill="none" />
+    <polyline points="774.00,-13.00 617.00,182.00 811.00,74.00" id="item_2134545146096" custom:name="Polyline" stroke="#ffffff" stroke-width="1.00" fill="none" />
+    <polyline points="120.00,262.00 89.00,466.00 119.00,351.00 182.00,354.00" id="item_2134545221392" custom:name="Polyline" stroke="#ffffff" stroke-width="1.00" fill="none" />
+    <rect x="188.00" y="262.00" width="158.00" height="200.00" id="item_2134545221824" custom:name="Rectangle" stroke="#ffffff" stroke-width="1.00" fill="#ff0bd6" />
+  </g>
+</svg>

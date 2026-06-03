@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (QDockWidget, QTreeWidget, QTreeWidgetItem,
                              QMenu, QInputDialog, QMessageBox, QAbstractItemView, QApplication, QGraphicsItem,
                              QPushButton, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QToolButton) # Added QLabel, QHBoxLayout, QToolButton
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QPalette
 from ..items.layer_item import LayerItem
 
 
@@ -19,6 +19,18 @@ class LayersDock(QDockWidget):
         self.tree_widget = QTreeWidget(self)
         self.tree_widget.setHeaderLabels(["Layers"])
         self.tree_widget.setSelectionMode(QAbstractItemView.ExtendedSelection) # Allow multiple selections
+        self.tree_widget.setIndentation(10) # Adjust indentation for better appearance
+        
+        # Включаем drag and drop в QTreeWidget
+        self.tree_widget.setDragEnabled(True)
+        self.tree_widget.setAcceptDrops(True)
+        self.tree_widget.setDropIndicatorShown(True)
+        self.tree_widget.setDragDropMode(QAbstractItemView.InternalMove)
+        
+        # Перегружаем drag parameters и dropEvent
+        self.tree_widget.dragEnterEvent = self._tree_dragEnterEvent
+        self.tree_widget.dragMoveEvent = self._tree_dragMoveEvent
+        self.tree_widget.dropEvent = self._tree_dropEvent
         
         main_layout.addWidget(self.tree_widget) # Add tree widget to the layout
         
@@ -32,39 +44,78 @@ class LayersDock(QDockWidget):
         
         self.tree_widget.itemChanged.connect(self._on_item_changed)
         self.tree_widget.itemClicked.connect(self._on_item_clicked)
+        self.tree_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree_widget.customContextMenuRequested.connect(self._on_context_menu)
         
         # Connect button signals
         add_layer_button.clicked.connect(self._add_layer)
         
         self._populate_layers()
 
+    def _on_context_menu(self, position):
+        item = self.tree_widget.itemAt(position)
+        if item:
+            menu = QMenu(self)
+            remove_action = menu.addAction("Remove")
+            action = menu.exec_(self.tree_widget.mapToGlobal(position))
+            if action == remove_action:
+                item_data = item.data(0, Qt.UserRole)
+                self._remove_item_from_tree(item_data)
+
     def _populate_layers(self):
         self.tree_widget.clear()
         for layer in self._document.layers:
-            self._add_layer_to_tree(layer)
+            tree_item = self._add_layer_to_tree(layer)
             # Expand the layer item by default
-            item = self.tree_widget.findItems(layer.name, Qt.MatchExactly, 0)[0] # Assuming unique layer names
-            if item:
-                item.setExpanded(True)
+            if tree_item:
+                tree_item.setExpanded(True)
 
     def _add_layer_to_tree(self, layer):
-        item = QTreeWidgetItem(self.tree_widget, [layer.name])
+        item = QTreeWidgetItem(self.tree_widget)
+        item.setText(0, layer.name) # Set text for editing
         item.setFlags(item.flags() | Qt.ItemIsEditable)
         item.setData(0, Qt.UserRole, layer)
         self.tree_widget.addTopLevelItem(item)
+        
+        # The custom widget is removed to allow direct editing of the QTreeWidgetItem text.
+        # The QLabel update will happen in _on_item_changed.
+        # widget = self._create_item_widget(layer.name, layer)
+        # self.tree_widget.setItemWidget(item, 0, widget)
+        # item.setForeground(0, QApplication.palette().color(QPalette.Window)) # Hide default text
+        
         for child_item in layer.childItems():
             self._add_child_item_to_tree(item, child_item)
+        return item
 
     def _add_child_item_to_tree(self, parent_item, child_item_data):
-        item = QTreeWidgetItem(parent_item, [child_item_data.name])
+        item = QTreeWidgetItem(parent_item)
+        item.setText(0, child_item_data.name) # Set text for editing
         item.setFlags(item.flags() | Qt.ItemIsEditable)
         item.setData(0, Qt.UserRole, child_item_data)
         parent_item.addChild(item)
 
+        # The custom widget is removed to allow direct editing of the QTreeWidgetItem text.
+        # The QLabel update will happen in _on_item_changed.
+        # widget = self._create_item_widget(child_item_data.name, child_item_data)
+        # self.tree_widget.setItemWidget(item, 0, widget)
+        # item.setForeground(0, QApplication.palette().color(QPalette.Window)) # Hide default text
+        return item
+
     def _on_item_changed(self, item, column):
-        layer = item.data(0, Qt.UserRole)
-        if isinstance(layer, LayerItem) and item.text(column) != layer.name:
-            layer.name = item.text(column)
+        # When an item's text is changed via editing in the tree widget
+        data = item.data(0, Qt.UserRole)
+        if hasattr(data, 'name'):
+            old_name = getattr(data, 'name')
+            new_name = item.text(column)
+            if old_name != new_name:
+                from vector_editor.core.commands import ChangePropertyCommand
+                cmd = ChangePropertyCommand(data, 'name', old_name, new_name)
+                self._document.push_command(cmd)
+            else:
+                # If the name hasn't actually changed, revert the tree widget item to old name
+                # to prevent unnecessary command pushes or visual glitches.
+                # This is important because itemChanged is emitted even if text is same.
+                item.setText(column, old_name)
 
     def _add_layer(self):
         name, ok = QInputDialog.getText(self, "Новый слой", "Введите имя слоя:")
@@ -72,6 +123,16 @@ class LayersDock(QDockWidget):
             self._document.add_layer(name)
             self._populate_layers()
 
+    def _remove_item_from_tree(self, item_data):
+        reply = QMessageBox.question(self, 'Удалить', 
+                                     f"Вы уверены, что хотите удалить '{item_data.name}'?", 
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            if isinstance(item_data, LayerItem):
+                self._document.remove_layer(item_data)
+            else:
+                self._document.remove_item(item_data)
+            self._populate_layers() # Refresh the tree after removal
 
     def _on_item_clicked(self, item, column):
         data = item.data(0, Qt.UserRole)
@@ -167,3 +228,170 @@ class LayersDock(QDockWidget):
                         break # Found the child, move to next selected_doc_item
         
         self.tree_widget.blockSignals(False) # Unblock signals
+
+    def _tree_dragEnterEvent(self, event):
+        if event.source() == self.tree_widget:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def _tree_dragMoveEvent(self, event):
+        if event.source() == self.tree_widget:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def _tree_dropEvent(self, event):
+        selected_items = self.tree_widget.selectedItems()
+        if not selected_items:
+            event.ignore()
+            return
+
+        # Нам нужно понять, КУДА мы перетаскиваем. 
+        # tree_widget.itemAt(event.pos()) возвращает элемент под мышкой.
+        target_item = self.tree_widget.itemAt(event.pos())
+        
+        # Определяем положение перетаскивания относительно target_item (выше, на него, ниже)
+        drop_pos = self.tree_widget.dropIndicatorPosition()
+        
+        # Разделим выделенные элементы на Слои и Фигуры
+        dragged_layers = []
+        dragged_shapes = []
+        for item in selected_items:
+            data = item.data(0, Qt.UserRole)
+            if isinstance(data, LayerItem):
+                dragged_layers.append(item)
+            else:
+                dragged_shapes.append(item)
+
+        # Сценарий 1: Драг слоев (изменение порядка слоев)
+        if dragged_layers:
+            # Запрещено тащить слои внутрь других слоев или фигур
+            # Список всех слоев до изменений
+            old_layers = self._document.layers.copy()
+            new_layers = old_layers.copy()
+
+            # Удаляем перемещаемые слои из временного списка слоев
+            move_layers_data = [item.data(0, Qt.UserRole) for item in dragged_layers]
+            for layer_data in move_layers_data:
+                if layer_data in new_layers:
+                    new_layers.remove(layer_data)
+
+            # Находим целевой индекс для вставки
+            if target_item:
+                target_data = target_item.data(0, Qt.UserRole)
+                # Если target_data не LayerItem, найдем его родительский слой
+                if not isinstance(target_data, LayerItem):
+                    parent_item = target_item.parent()
+                    if parent_item:
+                        target_data = parent_item.data(0, Qt.UserRole)
+                    else:
+                        target_data = None
+                
+                if isinstance(target_data, LayerItem) and target_data in new_layers:
+                    dest_idx = new_layers.index(target_data)
+                    # Если drop_pos - ниже элемента, то вставляем ПОСЛЕ этого элемента
+                    from PyQt5.QtWidgets import QAbstractItemView
+                    if drop_pos == QAbstractItemView.BelowItem:
+                        dest_idx += 1
+                else:
+                    dest_idx = len(new_layers)
+            else:
+                dest_idx = len(new_layers)
+
+            # Вставляем перетаскиваемые слои в позицию dest_idx
+            for layer_data in reversed(move_layers_data):
+                new_layers.insert(dest_idx, layer_data)
+
+            # Если порядок изменился, запускаем команду!
+            if old_layers != new_layers:
+                from vector_editor.core.commands import ReorderLayersCommand
+                cmd = ReorderLayersCommand(self._document, old_layers, new_layers)
+                self._document.push_command(cmd)
+                self._populate_layers()
+            
+            event.acceptProposedAction()
+            return
+
+        # Сценарий 2: Драг фигур (перемещение между слоями или урегулирование порядка внутри слоя)
+        if dragged_shapes:
+            if not target_item:
+                event.ignore()
+                return
+
+            target_data = target_item.data(0, Qt.UserRole)
+            
+            # Определяем целевой слой и желаемую позицию (индекс) внутри него
+            target_layer = None
+            insert_index = None
+
+            from PyQt5.QtWidgets import QAbstractItemView
+            if isinstance(target_data, LayerItem):
+                target_layer = target_data
+                if drop_pos == QAbstractItemView.OnItem:
+                    # Перетащили НА слой -> помещаем в конец этого слоя
+                    insert_index = len(target_layer.childItems())
+                elif drop_pos == QAbstractItemView.AboveItem:
+                    # Перетащили чуть выше слоя -> помещаем в начало этого слоя
+                    insert_index = 0
+                elif drop_pos == QAbstractItemView.BelowItem:
+                    # Перетащили чуть ниже слоя -> помещаем в начало этого слоя (или конец, но logical - в начало)
+                    insert_index = 0
+            else:
+                # Перетащили на/около другой фигуры
+                parent_tree_item = target_item.parent()
+                if parent_tree_item:
+                    target_layer = parent_tree_item.data(0, Qt.UserRole)
+                    # Находим индекс фигуры под курсором в ее слое
+                    sibling_items = target_layer.childItems()
+                    if target_data in sibling_items:
+                        idx = sibling_items.index(target_data)
+                        if drop_pos == QAbstractItemView.AboveItem:
+                            insert_index = idx
+                        elif drop_pos == QAbstractItemView.BelowItem:
+                            insert_index = idx + 1
+                        else: # OnItem
+                            insert_index = idx
+
+            if target_layer is None:
+                event.ignore()
+                return
+
+            # Список перемещаемых объектов QGraphicsItem
+            shapes_data = [item.data(0, Qt.UserRole) for item in dragged_shapes]
+            
+            # Строим новую последовательность детей для целевого слоя
+            current_children = target_layer.childItems()
+            # Удаляем перетаскиваемые фигуры из списка детей (если они там были)
+            new_children_order = [child for child in current_children if child not in shapes_data]
+            
+            # Корректируем insert_index
+            if insert_index is None:
+                insert_index = len(new_children_order)
+            else:
+                insert_index = min(max(0, insert_index), len(new_children_order))
+
+            # Вставляем перетаскиваемые фигуры
+            for shape in reversed(shapes_data):
+                new_children_order.insert(insert_index, shape)
+
+            # Проверяем, изменилось ли что-то
+            # Изменился ли порядок (или слой)
+            is_changed = False
+            for shape in shapes_data:
+                if shape.parentItem() != target_layer:
+                    is_changed = True
+                    break
+            if not is_changed:
+                # Если слой тот же, проверяем порядок детей
+                if current_children != new_children_order:
+                    is_changed = True
+
+            if is_changed:
+                from vector_editor.core.commands import MoveAndReorderItemsCommand
+                cmd = MoveAndReorderItemsCommand(self._document, shapes_data, target_layer, new_children_order)
+                self._document.push_command(cmd)
+                self._populate_layers()
+
+            event.acceptProposedAction()
+            return
